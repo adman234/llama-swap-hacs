@@ -1,2 +1,7 @@
 homeassistant==2025.7.4
 pytest-homeassistant-custom-component==0.13.264
+
+# Home Assistant pins aiodns==3.5.0, whose type annotations reference names
+# that pycares removed in 5.0. Without this pin, importing aiohttp fails with
+# AttributeError: module 'pycares' has no attribute 'ares_query_a_result'.
+pycares<5
