@@ -1,0 +1,46 @@
+load_model:
+  fields:
+    model:
+      required: true
+      example: qwen3-coder
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: llama_swap
+
+unload_model:
+  fields:
+    model:
+      required: true
+      example: qwen3-coder
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: llama_swap
+
+unload_all:
+  fields:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: llama_swap
+
+set_profile:
+  fields:
+    profile:
+      required: false
+      example: coding
+      selector:
+        text:
+    config_entry_id:
+      required: false
+      selector:
+        config_entry:
+          integration: llama_swap

@@ -1,0 +1,230 @@
+{
+  "config": {
+    "step": {
+      "user": {
+        "title": "Connect to llama-swap",
+        "description": "Enter the address of your llama-swap server. The API key is only needed if llama-swap is configured with one.",
+        "data": {
+          "host": "Host",
+          "port": "Port",
+          "api_key": "API key",
+          "ssl": "Use HTTPS",
+          "verify_ssl": "Verify SSL certificate"
+        },
+        "data_description": {
+          "host": "Hostname or IP address of the machine running llama-swap.",
+          "port": "The port llama-swap listens on (8080 by default)."
+        }
+      },
+      "reauth_confirm": {
+        "title": "Re-authenticate llama-swap",
+        "description": "The API key was rejected. Enter the current key, or leave it blank if llama-swap no longer requires one.",
+        "data": {
+          "api_key": "API key"
+        }
+      }
+    },
+    "error": {
+      "cannot_connect": "Failed to connect. Check the host, port and that llama-swap is running.",
+      "invalid_auth": "The API key was rejected by llama-swap.",
+      "unknown": "Unexpected response from llama-swap."
+    },
+    "abort": {
+      "already_configured": "This llama-swap server is already configured.",
+      "reauth_successful": "Re-authentication was successful."
+    }
+  },
+  "options": {
+    "step": {
+      "init": {
+        "title": "llama-swap options",
+        "data": {
+          "scan_interval": "Update interval"
+        },
+        "data_description": {
+          "scan_interval": "How often to poll llama-swap, in seconds."
+        }
+      }
+    }
+  },
+  "entity": {
+    "binary_sensor": {
+      "any_model_loaded": {
+        "name": "Model loaded"
+      },
+      "model_loaded": {
+        "name": "Loaded"
+      }
+    },
+    "button": {
+      "unload_all": {
+        "name": "Unload all models"
+      },
+      "unload_model": {
+        "name": "Unload"
+      }
+    },
+    "select": {
+      "profile": {
+        "name": "Profile"
+      }
+    },
+    "switch": {
+      "model_switch": {
+        "name": "Loaded"
+      }
+    },
+    "sensor": {
+      "active_model": {
+        "name": "Active model"
+      },
+      "loaded_models": {
+        "name": "Loaded models"
+      },
+      "total_models": {
+        "name": "Configured models"
+      },
+      "version": {
+        "name": "Version"
+      },
+      "active_profile": {
+        "name": "Active profile"
+      },
+      "cpu_utilization": {
+        "name": "CPU utilization"
+      },
+      "memory_used": {
+        "name": "Memory used"
+      },
+      "memory_total": {
+        "name": "Memory total"
+      },
+      "memory_utilization": {
+        "name": "Memory utilization"
+      },
+      "swap_used": {
+        "name": "Swap used"
+      },
+      "load_1m": {
+        "name": "Load average 1m"
+      },
+      "load_5m": {
+        "name": "Load average 5m"
+      },
+      "load_15m": {
+        "name": "Load average 15m"
+      },
+      "model_state": {
+        "name": "State",
+        "state": {
+          "stopped": "Stopped",
+          "starting": "Starting",
+          "ready": "Ready",
+          "stopping": "Stopping",
+          "shutdown": "Shutdown"
+        }
+      },
+      "context_length": {
+        "name": "Context length"
+      },
+      "ttl": {
+        "name": "Unload after"
+      },
+      "gpu_utilization": {
+        "name": "Utilization"
+      },
+      "vram_used": {
+        "name": "VRAM used"
+      },
+      "vram_total": {
+        "name": "VRAM total"
+      },
+      "vram_utilization": {
+        "name": "VRAM utilization"
+      },
+      "gpu_temperature": {
+        "name": "Temperature"
+      },
+      "vram_temperature": {
+        "name": "VRAM temperature"
+      },
+      "gpu_power": {
+        "name": "Power draw"
+      },
+      "gpu_fan_speed": {
+        "name": "Fan speed"
+      }
+    }
+  },
+  "services": {
+    "load_model": {
+      "name": "Load model",
+      "description": "Loads a model into memory. Returns once llama-swap reports the model is ready, which can take a while for large models.",
+      "fields": {
+        "model": {
+          "name": "Model",
+          "description": "The model ID, as listed by llama-swap."
+        },
+        "config_entry_id": {
+          "name": "llama-swap server",
+          "description": "Which server to act on. Only needed when more than one is configured."
+        }
+      }
+    },
+    "unload_model": {
+      "name": "Unload model",
+      "description": "Stops one model and frees its memory.",
+      "fields": {
+        "model": {
+          "name": "Model",
+          "description": "The model ID, as listed by llama-swap."
+        },
+        "config_entry_id": {
+          "name": "llama-swap server",
+          "description": "Which server to act on. Only needed when more than one is configured."
+        }
+      }
+    },
+    "unload_all": {
+      "name": "Unload all models",
+      "description": "Stops every running model and frees their memory.",
+      "fields": {
+        "config_entry_id": {
+          "name": "llama-swap server",
+          "description": "Which server to act on. Only needed when more than one is configured."
+        }
+      }
+    },
+    "set_profile": {
+      "name": "Set profile",
+      "description": "Activates a llama-swap profile, or clears the active one.",
+      "fields": {
+        "profile": {
+          "name": "Profile",
+          "description": "The profile ID to activate. Leave empty to deactivate the current profile."
+        },
+        "config_entry_id": {
+          "name": "llama-swap server",
+          "description": "Which server to act on. Only needed when more than one is configured."
+        }
+      }
+    }
+  },
+  "exceptions": {
+    "entry_not_found": {
+      "message": "No loaded llama-swap server with config entry ID {entry_id}."
+    },
+    "no_entries": {
+      "message": "No llama-swap server is set up."
+    },
+    "entry_id_required": {
+      "message": "Several llama-swap servers are configured. Specify which one with config_entry_id."
+    },
+    "unknown_model": {
+      "message": "llama-swap does not know a model called {model}."
+    },
+    "unknown_profile": {
+      "message": "llama-swap does not know a profile called {profile}."
+    }
+  }
+}

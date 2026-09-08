@@ -1,0 +1,16 @@
+target-version = "py312"
+line-length = 88
+
+[lint]
+select = ["E", "F", "W", "I", "UP", "B", "D", "SIM", "RET", "ASYNC"]
+# ASYNC109: the API client takes an explicit per-call timeout rather than
+# relying on an ambient one; that is the intended interface.
+ignore = ["D203", "D213", "ASYNC109"]
+
+[lint.isort]
+force-sort-within-sections = true
+known-first-party = ["homeassistant", "custom_components"]
+combine-as-imports = true
+
+[lint.pydocstyle]
+convention = "pep257"
