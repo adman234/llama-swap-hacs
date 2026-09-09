@@ -1,4 +1,4 @@
-"""Tests for retiring the duplicate per-model entities on existing installs."""
+"""Tests for removing the duplicate per-model entities on existing installs."""
 
 from __future__ import annotations
 
@@ -13,12 +13,12 @@ from homeassistant.helpers import entity_registry as er
 from .conftest import setup_integration
 
 
-def _old_entry() -> MockConfigEntry:
-    """Return a config entry as an install from before the trim would have."""
+def _old_entry(minor_version: int = 1) -> MockConfigEntry:
+    """Return a config entry as an earlier version would have written it."""
     return MockConfigEntry(
         domain=DOMAIN,
         title="llama.local:8080",
-        minor_version=1,
+        minor_version=minor_version,
         data={
             CONF_HOST: "llama.local",
             CONF_PORT: 8080,
@@ -49,13 +49,13 @@ def _register_legacy_entities(
     return created
 
 
-async def test_existing_duplicates_are_disabled(
+async def test_existing_duplicates_are_removed(
     hass: HomeAssistant, mock_llama_swap: AiohttpClientMocker
 ) -> None:
-    """An install that already had them loses them without touching anything.
+    """An install that already had them loses them outright.
 
-    entity_registry_enabled_default only governs first registration, so these
-    have to be turned off explicitly for anyone who was already running.
+    Nothing creates these entities any more, so leaving the registry entries
+    behind would strand them in the UI as permanently unavailable.
     """
     entry = _old_entry()
     entry.add_to_hass(hass)
@@ -63,21 +63,42 @@ async def test_existing_duplicates_are_disabled(
 
     entity_registry = er.async_get(hass)
     for entity_id in legacy.values():
-        assert entity_registry.async_get(entity_id).disabled_by is None
+        assert entity_registry.async_get(entity_id) is not None
 
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
     for entity_id in legacy.values():
-        registry_entry = entity_registry.async_get(entity_id)
-        assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+        assert entity_registry.async_get(entity_id) is None
         assert hass.states.get(entity_id) is None
 
-    assert entry.minor_version == 2
+    assert entry.minor_version == 3
 
     # What replaces them is still there.
     assert hass.states.get("switch.qwen3_coder_30b_loaded").state == STATE_ON
     assert hass.states.get("sensor.qwen3_coder_30b_state").state == "ready"
+
+
+async def test_already_disabled_entries_are_removed(
+    hass: HomeAssistant, mock_llama_swap: AiohttpClientMocker
+) -> None:
+    """Installs that stopped at the disabling step get cleaned up too."""
+    entry = _old_entry(minor_version=2)
+    entry.add_to_hass(hass)
+    legacy = _register_legacy_entities(hass, entry)
+
+    entity_registry = er.async_get(hass)
+    for entity_id in legacy.values():
+        entity_registry.async_update_entity(
+            entity_id, disabled_by=er.RegistryEntryDisabler.INTEGRATION
+        )
+
+    await hass.config_entries.async_setup(entry.entry_id)
+    await hass.async_block_till_done()
+
+    for entity_id in legacy.values():
+        assert entity_registry.async_get(entity_id) is None
+    assert entry.minor_version == 3
 
 
 async def test_server_equivalents_survive(
@@ -110,57 +131,39 @@ async def test_server_equivalents_survive(
     await hass.async_block_till_done()
 
     for entity_id in (server_loaded.entity_id, server_unload.entity_id):
-        assert entity_registry.async_get(entity_id).disabled_by is None
+        assert entity_registry.async_get(entity_id) is not None
         assert hass.states.get(entity_id) is not None
 
 
-async def test_re_enabling_is_not_undone(
+async def test_removal_does_not_come_back(
     hass: HomeAssistant, mock_llama_swap: AiohttpClientMocker
 ) -> None:
-    """Turning one back on survives a reload, because the migration is done."""
+    """Nothing recreates them on a later reload."""
     entry = _old_entry()
     entry.add_to_hass(hass)
     legacy = _register_legacy_entities(hass, entry)
     await hass.config_entries.async_setup(entry.entry_id)
     await hass.async_block_till_done()
 
-    entity_registry = er.async_get(hass)
-    entity_registry.async_update_entity(legacy["loaded"], disabled_by=None)
     await hass.config_entries.async_reload(entry.entry_id)
     await hass.async_block_till_done()
 
-    assert entity_registry.async_get(legacy["loaded"]).disabled_by is None
-    assert hass.states.get(legacy["loaded"]).state == STATE_ON
-
-
-async def test_a_users_own_choice_is_kept(
-    hass: HomeAssistant, mock_llama_swap: AiohttpClientMocker
-) -> None:
-    """An entity the user disabled stays marked as their doing, not ours."""
-    entry = _old_entry()
-    entry.add_to_hass(hass)
-    legacy = _register_legacy_entities(hass, entry)
     entity_registry = er.async_get(hass)
-    entity_registry.async_update_entity(
-        legacy["unload"], disabled_by=er.RegistryEntryDisabler.USER
-    )
-
-    await hass.config_entries.async_setup(entry.entry_id)
-    await hass.async_block_till_done()
-
-    assert (
-        entity_registry.async_get(legacy["unload"]).disabled_by
-        is er.RegistryEntryDisabler.USER
-    )
+    for entity_id in legacy.values():
+        assert entity_registry.async_get(entity_id) is None
 
 
-async def test_new_install_needs_no_migration(
+async def test_new_install_never_creates_them(
     hass: HomeAssistant, mock_llama_swap: AiohttpClientMocker, config_entry
 ) -> None:
-    """A fresh entry is already current and never sees these entities."""
+    """A fresh entry has no per-model binary sensor or unload button at all."""
     await setup_integration(hass, config_entry)
 
-    assert config_entry.minor_version == 2
+    assert config_entry.minor_version == 3
     entity_registry = er.async_get(hass)
-    registry_entry = entity_registry.async_get("binary_sensor.qwen3_coder_30b_loaded")
-    assert registry_entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
+    assert entity_registry.async_get("binary_sensor.qwen3_coder_30b_loaded") is None
+    assert entity_registry.async_get("button.qwen3_coder_30b_unload") is None
+
+    # The per-model switch and state sensor remain.
+    assert entity_registry.async_get("switch.qwen3_coder_30b_loaded") is not None
+    assert entity_registry.async_get("sensor.qwen3_coder_30b_state") is not None

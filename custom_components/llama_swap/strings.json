@@ -51,17 +51,11 @@
     "binary_sensor": {
       "any_model_loaded": {
         "name": "Model loaded"
-      },
-      "model_loaded": {
-        "name": "Loaded"
       }
     },
     "button": {
       "unload_all": {
         "name": "Unload all models"
-      },
-      "unload_model": {
-        "name": "Unload"
       }
     },
     "select": {

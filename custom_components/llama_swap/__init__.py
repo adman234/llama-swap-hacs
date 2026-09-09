@@ -115,25 +115,27 @@ async def async_migrate_entry(hass: HomeAssistant, entry: LlamaSwapConfigEntry) 
         # Written by a newer version of this integration.
         return False
 
-    if entry.minor_version < 2:
-        _async_retire_duplicate_entities(hass, entry)
-        hass.config_entries.async_update_entry(entry, minor_version=2)
+    if entry.minor_version < 3:
+        _async_remove_retired_entities(hass, entry)
+        hass.config_entries.async_update_entry(entry, minor_version=3)
 
     return True
 
 
 @callback
-def _async_retire_duplicate_entities(
+def _async_remove_retired_entities(
     hass: HomeAssistant, entry: LlamaSwapConfigEntry
 ) -> None:
-    """Disable the per-model entities that duplicate the model's switch.
+    """Delete the per-model entities that duplicated the model's switch.
 
-    These became disabled-by-default, but that only governs entities being
-    registered for the first time: anything already in the registry keeps the
-    enabled state it was created with. Existing installs therefore need them
-    turned off explicitly, once. A choice the user has already made is left
-    alone, and re-enabling one afterwards sticks, because this runs only while
-    migrating from minor version 1.
+    The switch already shows whether a model is loaded and unloads it when
+    turned off, so the per-model binary sensor and unload button carried
+    nothing of their own. Their registry entries are removed rather than
+    disabled: no code creates them any more, and a registry entry with no
+    entity behind it would sit in the UI as unavailable forever.
+
+    Anchored on the per-model unique ID prefix, because the server-wide
+    binary sensor and unload button end their IDs the same way and stay.
     """
     entity_registry = er.async_get(hass)
     model_prefix = f"{entry.entry_id}_model_"
@@ -146,7 +148,7 @@ def _async_retire_duplicate_entities(
         entity_registry, entry.entry_id
     ):
         suffix = retired.get(registry_entry.domain)
-        if suffix is None or registry_entry.disabled_by is not None:
+        if suffix is None:
             continue
         if not registry_entry.unique_id.startswith(model_prefix):
             continue
@@ -154,13 +156,10 @@ def _async_retire_duplicate_entities(
             continue
 
         _LOGGER.debug(
-            "Disabling %s; the model's switch already covers it",
+            "Removing %s; the model's switch already covers it",
             registry_entry.entity_id,
         )
-        entity_registry.async_update_entity(
-            registry_entry.entity_id,
-            disabled_by=er.RegistryEntryDisabler.INTEGRATION,
-        )
+        entity_registry.async_remove(registry_entry.entity_id)
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: LlamaSwapConfigEntry) -> bool:

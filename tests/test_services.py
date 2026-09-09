@@ -12,11 +12,11 @@ from custom_components.llama_swap.const import DOMAIN
 from custom_components.llama_swap.diagnostics import (
     async_get_config_entry_diagnostics,
 )
-from homeassistant.const import ATTR_ENTITY_ID, CONF_API_KEY, CONF_HOST, CONF_PORT
+from homeassistant.const import CONF_API_KEY, CONF_HOST, CONF_PORT
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import BASE_URL, async_enable_entity, setup_integration
+from .conftest import BASE_URL, setup_integration
 
 SECOND_URL = "http://other.local:8080"
 
@@ -43,23 +43,6 @@ async def test_unload_model_falls_back_on_old_server(
         DOMAIN, "unload_model", {"model": "qwen3-coder"}, blocking=True
     )
     assert "/unload" in _paths(mock_llama_swap)
-
-
-async def test_unload_model_button(
-    hass: HomeAssistant, mock_llama_swap: AiohttpClientMocker, config_entry
-) -> None:
-    """The per-model unload button hits the per-model endpoint once enabled."""
-    await setup_integration(hass, config_entry)
-    await async_enable_entity(hass, config_entry, "button.qwen3_coder_30b_unload")
-    mock_llama_swap.post(f"{BASE_URL}/api/models/unload/qwen3-coder", text="OK")
-
-    await hass.services.async_call(
-        "button",
-        "press",
-        {ATTR_ENTITY_ID: "button.qwen3_coder_30b_unload"},
-        blocking=True,
-    )
-    assert "/api/models/unload/qwen3-coder" in _paths(mock_llama_swap)
 
 
 async def test_entry_id_required_with_two_servers(

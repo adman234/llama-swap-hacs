@@ -14,7 +14,7 @@ from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError, ServiceValidationError
 from homeassistant.helpers import device_registry as dr, entity_registry as er
 
-from .conftest import BASE_URL, async_enable_entity, setup_integration
+from .conftest import BASE_URL, setup_integration
 
 
 def _put_bodies(mock: AiohttpClientMocker, path: str) -> list[Any]:
@@ -290,38 +290,23 @@ async def test_entity_ids_are_stable(
     assert entry.unique_id == f"{config_entry.entry_id}_active_model"
 
 
-async def test_redundant_model_entities_are_disabled(
+async def test_retired_model_entities_are_absent(
     hass: HomeAssistant, mock_llama_swap: AiohttpClientMocker, config_entry
 ) -> None:
-    """The per-model binary sensor and unload button are opt-in.
+    """No per-model binary sensor or unload button is created.
 
-    Both duplicate the model's switch, so they are registered but disabled to
-    keep a large model list from doubling its entity count.
+    Both duplicated the model's switch, which shows the same on/off state and
+    unloads when turned off.
     """
     await setup_integration(hass, config_entry)
-    entity_registry = er.async_get(hass)
 
     for entity_id in (
         "binary_sensor.qwen3_coder_30b_loaded",
         "button.qwen3_coder_30b_unload",
     ):
-        entry = entity_registry.async_get(entity_id)
-        assert entry is not None, f"{entity_id} should still be registered"
-        assert entry.disabled_by is er.RegistryEntryDisabler.INTEGRATION
         assert hass.states.get(entity_id) is None
+        assert er.async_get(hass).async_get(entity_id) is None
 
-    # The server-wide equivalents stay on, having no switch to duplicate.
+    # The server-wide equivalents stay, having no switch to duplicate.
     assert hass.states.get("binary_sensor.llama_local_8080_model_loaded") is not None
     assert hass.states.get("button.llama_local_8080_unload_all_models") is not None
-
-
-async def test_disabled_entity_can_be_enabled(
-    hass: HomeAssistant, mock_llama_swap: AiohttpClientMocker, config_entry
-) -> None:
-    """Enabling the per-model binary sensor brings it back."""
-    await setup_integration(hass, config_entry)
-    await async_enable_entity(
-        hass, config_entry, "binary_sensor.qwen3_coder_30b_loaded"
-    )
-
-    assert hass.states.get("binary_sensor.qwen3_coder_30b_loaded").state == STATE_ON

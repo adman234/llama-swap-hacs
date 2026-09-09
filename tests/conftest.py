@@ -34,7 +34,6 @@ from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClien
 from custom_components.llama_swap.const import CONF_VERIFY_SSL, DOMAIN
 from homeassistant.const import CONF_HOST, CONF_PORT, CONF_SSL
 from homeassistant.core import HomeAssistant
-from homeassistant.helpers import entity_registry as er
 
 BASE_URL = "http://llama.local:8080"
 
@@ -244,16 +243,6 @@ async def async_advance(
     freezer.tick(timedelta(seconds=seconds))
     async_fire_time_changed(hass)
     await hass.async_block_till_done(wait_background_tasks=True)
-
-
-async def async_enable_entity(
-    hass: HomeAssistant, entry: MockConfigEntry, entity_id: str
-) -> None:
-    """Enable a disabled-by-default entity and reload so it gets added."""
-    entity_registry = er.async_get(hass)
-    entity_registry.async_update_entity(entity_id, disabled_by=None)
-    await hass.config_entries.async_reload(entry.entry_id)
-    await hass.async_block_till_done()
 
 
 async def setup_integration(

@@ -95,21 +95,13 @@ own device, linked to the server.
 | `sensor.<model>_context_length` | Context size (see below) |
 | `sensor.<model>_model_file` | The weights file, e.g. `Qwen3-Coder-30B-Q4_K_M.gguf` |
 | `sensor.<model>_unload_after` | The model's TTL in seconds |
-| `binary_sensor.<model>_loaded` | On while the model holds a process (disabled by default) |
-| `button.<model>_unload` | Unload just this model (disabled by default) |
 
-The last two are off by default because they duplicate the switch: the switch
-already shows loaded/not-loaded, and turning it off already unloads. With a
-dozen models, enabling them doubles the entity count for no new information.
-Enable either one per model from the device page if you want a read-only
-indicator or a control that cannot accidentally start a model.
+There is deliberately no per-model binary sensor or unload button: the switch
+already shows whether a model is loaded and unloads it when turned off. If you
+installed before 2.0.0 you had both, and updating removes them.
 
-If you installed before 1.4.0 these two were enabled, and Home Assistant only
-applies a default at first registration. Updating disables them once, for each
-model; re-enabling one afterwards sticks.
-
-For automations, prefer `sensor.<model>_state` over the loaded/on-off entities.
-"Loaded" is true for both `starting` and `ready`, so it answers "is this
+For automations, prefer `sensor.<model>_state` over the switch's on/off state.
+The switch is on for both `starting` and `ready`, so it answers "is this
 occupying VRAM"; only the state sensor tells you whether the model can actually
 serve a request yet.
 
