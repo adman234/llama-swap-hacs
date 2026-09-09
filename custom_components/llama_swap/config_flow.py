@@ -78,6 +78,7 @@ class LlamaSwapConfigFlow(ConfigFlow, domain=DOMAIN):
     """Handle the llama-swap config flow."""
 
     VERSION = 1
+    MINOR_VERSION = 2
 
     async def async_step_user(
         self, user_input: dict[str, Any] | None = None

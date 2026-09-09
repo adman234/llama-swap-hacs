@@ -14,7 +14,7 @@ from homeassistant.const import (
     Platform,
 )
 from homeassistant.core import HomeAssistant, callback
-from homeassistant.helpers import device_registry as dr
+from homeassistant.helpers import device_registry as dr, entity_registry as er
 from homeassistant.helpers.aiohttp_client import async_get_clientsession
 
 from .api import LlamaSwapClient
@@ -107,6 +107,60 @@ async def async_remove_config_entry_device(
         domain == DOMAIN and identifier in current
         for domain, identifier in device.identifiers
     )
+
+
+async def async_migrate_entry(hass: HomeAssistant, entry: LlamaSwapConfigEntry) -> bool:
+    """Bring an older config entry up to date."""
+    if entry.version > 1:
+        # Written by a newer version of this integration.
+        return False
+
+    if entry.minor_version < 2:
+        _async_retire_duplicate_entities(hass, entry)
+        hass.config_entries.async_update_entry(entry, minor_version=2)
+
+    return True
+
+
+@callback
+def _async_retire_duplicate_entities(
+    hass: HomeAssistant, entry: LlamaSwapConfigEntry
+) -> None:
+    """Disable the per-model entities that duplicate the model's switch.
+
+    These became disabled-by-default, but that only governs entities being
+    registered for the first time: anything already in the registry keeps the
+    enabled state it was created with. Existing installs therefore need them
+    turned off explicitly, once. A choice the user has already made is left
+    alone, and re-enabling one afterwards sticks, because this runs only while
+    migrating from minor version 1.
+    """
+    entity_registry = er.async_get(hass)
+    model_prefix = f"{entry.entry_id}_model_"
+    retired = {
+        Platform.BINARY_SENSOR: "_loaded",
+        Platform.BUTTON: "_unload",
+    }
+
+    for registry_entry in er.async_entries_for_config_entry(
+        entity_registry, entry.entry_id
+    ):
+        suffix = retired.get(registry_entry.domain)
+        if suffix is None or registry_entry.disabled_by is not None:
+            continue
+        if not registry_entry.unique_id.startswith(model_prefix):
+            continue
+        if not registry_entry.unique_id.endswith(suffix):
+            continue
+
+        _LOGGER.debug(
+            "Disabling %s; the model's switch already covers it",
+            registry_entry.entity_id,
+        )
+        entity_registry.async_update_entity(
+            registry_entry.entity_id,
+            disabled_by=er.RegistryEntryDisabler.INTEGRATION,
+        )
 
 
 async def async_unload_entry(hass: HomeAssistant, entry: LlamaSwapConfigEntry) -> bool:

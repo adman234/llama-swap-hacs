@@ -102,6 +102,10 @@ dozen models, enabling them doubles the entity count for no new information.
 Enable either one per model from the device page if you want a read-only
 indicator or a control that cannot accidentally start a model.
 
+If you installed before 1.4.0 these two were enabled, and Home Assistant only
+applies a default at first registration. Updating disables them once, for each
+model; re-enabling one afterwards sticks.
+
 For automations, prefer `sensor.<model>_state` over the loaded/on-off entities.
 "Loaded" is true for both `starting` and `ready`, so it answers "is this
 occupying VRAM"; only the state sensor tells you whether the model can actually
