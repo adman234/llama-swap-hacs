@@ -88,8 +88,37 @@ own device, linked to the server.
 | `binary_sensor.<model>_loaded` | On while the model holds a process |
 | `switch.<model>_loaded` | Turn on to load, off to unload |
 | `button.<model>_unload` | Unload just this model |
-| `sensor.<model>_context_length` | Configured context size, when declared |
-| `sensor.<model>_unload_after` | The model's TTL in seconds (disabled by default) |
+| `sensor.<model>_context_length` | Context size (see below) |
+| `sensor.<model>_model_file` | The weights file, e.g. `Qwen3-Coder-30B-Q4_K_M.gguf` |
+| `sensor.<model>_unload_after` | The model's TTL in seconds |
+
+### Where context length and the model file come from
+
+llama-swap's `/v1/models` only reports `context_length` when the model's config
+explicitly sets it:
+
+```yaml
+models:
+  qwen3-coder:
+    cmd: llama-server -m /models/qwen3.gguf --ctx-size 65536
+    capabilities:
+      context: 65536   # only this makes /v1/models report a context length
+```
+
+Most configs pass `--ctx-size` and stop there, so the API reports nothing. This
+integration therefore falls back to reading the context size and the weights
+path out of the `cmd` that `/running` reports, handling `-c`, `--ctx-size`,
+`--ctx_size` and `--n-ctx`, plus `-m` / `--model` and the `--hf-repo` /
+`--hf-file` pair. The `context_source` attribute says which was used:
+`capabilities` for the declared value, `command` for the parsed one.
+
+llama-swap only exposes a model's command line while that model is running, so
+these two sensors and the TTL are unknown until the model has run once. After
+that the values are remembered, because they come from llama-swap's config
+rather than from the process, and the state sensor gains a `details_cached:
+true` attribute to show they are not live readings. They refresh the next time
+the model runs; if you change your llama-swap config, reload the integration to
+drop the remembered values.
 
 The state sensor carries the model's full detail as attributes, which is what
 you want for templates and conditions:
@@ -98,7 +127,8 @@ you want for templates and conditions:
 `peer` or `profile`), `aliases`, `capabilities` (for example
 `{"vision": true, "function_calling": true}`), `architecture` (input and output
 modalities), `supported_parameters`, `context_length`, `cmd`, `proxy`, `ttl`,
-`unlisted`, `loaded`, and any custom `metadata` from your llama-swap config.
+`unlisted`, `loaded`, `model_file`, `model_path`, `context_source`, and any
+custom `metadata` from your llama-swap config.
 
 > The `cmd` attribute is llama-swap's upstream command line. It shows model
 > paths and launch flags. It is redacted from downloadable diagnostics, but it

@@ -6,6 +6,7 @@ import asyncio
 from dataclasses import dataclass, field
 from datetime import timedelta
 import logging
+import shlex
 from typing import Any
 
 from homeassistant.config_entries import ConfigEntry
@@ -38,11 +39,15 @@ class ModelInfo:
     architecture: dict[str, Any] = field(default_factory=dict)
     supported_parameters: list[str] = field(default_factory=list)
     context_length: int | None = None
+    context_source: str | None = None
+    model_file: str | None = None
+    model_path: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
     cmd: str | None = None
     proxy: str | None = None
     ttl: int | None = None
     unlisted: bool = False
+    details_cached: bool = False
 
     @property
     def is_loaded(self) -> bool:
@@ -53,6 +58,24 @@ class ModelInfo:
     def display_name(self) -> str:
         """Return the friendly name, falling back to the model ID."""
         return self.name or self.id
+
+
+@dataclass(slots=True)
+class ModelFacts:
+    """Config-derived details for one model, remembered between runs.
+
+    llama-swap only reports a model's command line while it is running, but
+    everything derived from it (the weights, the context size, the TTL) comes
+    from its config and does not change until llama-swap is reloaded. Keeping
+    the last seen values means these stay populated once a model has run,
+    instead of blanking out the moment it unloads.
+    """
+
+    cmd: str
+    proxy: str | None = None
+    ttl: int | None = None
+    context_length: int | None = None
+    model_path: str | None = None
 
 
 @dataclass(slots=True)
@@ -105,6 +128,7 @@ class LlamaSwapCoordinator(DataUpdateCoordinator[LlamaSwapData]):
             update_interval=timedelta(seconds=scan_interval),
         )
         self.client = client
+        self._model_facts: dict[str, ModelFacts] = {}
         self._has_version = True
         self._has_profiles = True
         self._has_performance = True
@@ -126,7 +150,9 @@ class LlamaSwapCoordinator(DataUpdateCoordinator[LlamaSwapData]):
         except LlamaSwapError as err:
             raise UpdateFailed(str(err)) from err
 
-        data = LlamaSwapData(models=_build_models(models_raw, running_raw))
+        data = LlamaSwapData(
+            models=_build_models(models_raw, running_raw, self._model_facts)
+        )
 
         if self._has_version:
             try:
@@ -168,9 +194,15 @@ class LlamaSwapCoordinator(DataUpdateCoordinator[LlamaSwapData]):
 
 
 def _build_models(
-    models_raw: list[dict[str, Any]], running_raw: list[dict[str, Any]]
+    models_raw: list[dict[str, Any]],
+    running_raw: list[dict[str, Any]],
+    facts: dict[str, ModelFacts],
 ) -> dict[str, ModelInfo]:
-    """Merge /v1/models metadata with the /running process states."""
+    """Merge /v1/models metadata with the /running process states.
+
+    `facts` is updated in place with what this poll revealed, and used to fill
+    in details for models that are not running right now.
+    """
     running: dict[str, dict[str, Any]] = {
         entry["model"]: entry
         for entry in running_raw
@@ -202,32 +234,72 @@ def _build_models(
         proc = running.get(model_id)
         if proc is not None:
             info.state = _as_str(proc.get("state")) or STATE_STOPPED
-            info.cmd = _as_str(proc.get("cmd")) or None
-            info.proxy = _as_str(proc.get("proxy")) or None
-            info.ttl = _as_int(proc.get("ttl"))
         elif _as_str(_as_dict(record.get("status")).get("value")) == "loaded":
             # Selectors and aliases report "loaded" without a /running row of
             # their own, because the process belongs to the target model.
             info.state = STATE_READY
 
+        _apply_facts(info, proc, facts)
         models[model_id] = info
 
     # Unlisted models are hidden from /v1/models but still show up in /running.
     for model_id, proc in running.items():
         if model_id in models:
             continue
-        models[model_id] = ModelInfo(
+        info = ModelInfo(
             id=model_id,
             name=_as_str(proc.get("name")),
             description=_as_str(proc.get("description")),
             state=_as_str(proc.get("state")) or STATE_STOPPED,
-            cmd=_as_str(proc.get("cmd")) or None,
-            proxy=_as_str(proc.get("proxy")) or None,
-            ttl=_as_int(proc.get("ttl")),
             unlisted=True,
         )
+        _apply_facts(info, proc, facts)
+        models[model_id] = info
 
     return models
+
+
+def _apply_facts(
+    info: ModelInfo,
+    proc: dict[str, Any] | None,
+    facts: dict[str, ModelFacts],
+) -> None:
+    """Fill in a model's command-line details, remembering them for later.
+
+    While the model is running these come straight from /running. Once it
+    stops, the values last seen are reused, because they describe llama-swap's
+    configuration rather than the running process.
+    """
+    if info.context_length is not None:
+        info.context_source = "capabilities"
+
+    if proc is not None and (cmd := _as_str(proc.get("cmd"))):
+        known = ModelFacts(
+            cmd=cmd,
+            proxy=_as_str(proc.get("proxy")) or None,
+            ttl=_as_int(proc.get("ttl")),
+            context_length=parse_context_length(cmd),
+            model_path=parse_model_path(cmd),
+        )
+        facts[info.id] = known
+    elif (known := facts.get(info.id)) is None:
+        return
+    else:
+        info.details_cached = True
+
+    info.cmd = known.cmd
+    info.proxy = known.proxy
+    info.ttl = known.ttl
+    info.model_path = known.model_path
+    info.model_file = model_file_name(known.model_path)
+
+    if info.context_length is None:
+        # /v1/models only carries a context length when the llama-swap config
+        # sets capabilities.context, which most configs leave out in favour of
+        # passing --ctx-size on the command line.
+        info.context_length = known.context_length
+        if info.context_length is not None:
+            info.context_source = "command"
 
 
 def _latest_gpu_stats(raw: Any) -> list[dict[str, Any]]:
@@ -274,3 +346,82 @@ def _as_str_list(value: Any) -> list[str]:
     if not isinstance(value, list):
         return []
     return [item for item in value if isinstance(item, str)]
+
+
+# llama-server spells the context size and the model file several ways. Values
+# are only accepted when they parse, so an unrelated -c on some other upstream
+# binary cannot masquerade as a context length.
+_CTX_FLAGS = frozenset({"-c", "--ctx-size", "--ctx_size", "--n-ctx", "--n_ctx"})
+_MODEL_FLAGS = frozenset({"-m", "--model"})
+_HF_FILE_FLAGS = frozenset({"-hff", "--hf-file"})
+_HF_REPO_FLAGS = frozenset({"-hfr", "--hf-repo", "--hf-repo-draft"})
+
+
+def _tokenize(cmd: str) -> list[str]:
+    """Split a command line, tolerating Windows paths that shlex chokes on."""
+    try:
+        return shlex.split(cmd)
+    except ValueError:
+        return cmd.split()
+
+
+def _flag_values(tokens: list[str], flags: frozenset[str]) -> list[str]:
+    """Return every value given for a set of flags, in both syntaxes."""
+    values: list[str] = []
+    for index, token in enumerate(tokens):
+        if token in flags:
+            if index + 1 < len(tokens):
+                values.append(tokens[index + 1])
+            continue
+        name, separator, inline = token.partition("=")
+        if separator and name in flags:
+            values.append(inline)
+    return values
+
+
+def parse_context_length(cmd: str | None) -> int | None:
+    """Return the context size a llama-server command line asks for."""
+    if not cmd:
+        return None
+    for raw in _flag_values(_tokenize(cmd), _CTX_FLAGS):
+        try:
+            value = int(raw)
+        except ValueError:
+            continue
+        if value > 0:
+            return value
+    return None
+
+
+def parse_model_path(cmd: str | None) -> str | None:
+    """Return the weights a llama-server command line loads.
+
+    A local path wins; otherwise a Hugging Face repo/file pair is reported in
+    the form llama-server itself accepts, so the value always names something
+    recognisable.
+    """
+    if not cmd:
+        return None
+    tokens = _tokenize(cmd)
+
+    for value in _flag_values(tokens, _MODEL_FLAGS):
+        if value and not value.startswith("-"):
+            return value
+
+    repos = _flag_values(tokens, _HF_REPO_FLAGS)
+    files = _flag_values(tokens, _HF_FILE_FLAGS)
+    if repos and files:
+        return f"{repos[0]}/{files[0]}"
+    if files:
+        return files[0]
+    if repos:
+        return repos[0]
+    return None
+
+
+def model_file_name(model_path: str | None) -> str | None:
+    """Return just the file name from a model path."""
+    if not model_path:
+        return None
+    # Split on both separators: the server may run on Windows.
+    return model_path.replace("\\", "/").rstrip("/").rpartition("/")[2] or None

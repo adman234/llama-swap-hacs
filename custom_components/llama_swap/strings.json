@@ -153,6 +153,9 @@
       },
       "gpu_fan_speed": {
         "name": "Fan speed"
+      },
+      "model_file": {
+        "name": "Model file"
       }
     }
   },

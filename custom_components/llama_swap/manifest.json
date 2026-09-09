@@ -1,12 +1,14 @@
 {
   "domain": "llama_swap",
   "name": "llama-swap",
-  "codeowners": ["@adman234"],
+  "codeowners": [
+    "@adman234"
+  ],
   "config_flow": true,
   "documentation": "https://github.com/adman234/llama-swap-hacs",
   "integration_type": "hub",
   "iot_class": "local_polling",
   "issue_tracker": "https://github.com/adman234/llama-swap-hacs/issues",
   "requirements": [],
-  "version": "1.0.0"
+  "version": "1.1.0"
 }

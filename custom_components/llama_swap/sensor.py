@@ -87,6 +87,14 @@ def _model_attributes(model: ModelInfo) -> dict[str, Any]:
         attrs["supported_parameters"] = model.supported_parameters
     if model.context_length is not None:
         attrs["context_length"] = model.context_length
+        attrs["context_source"] = model.context_source
+    if model.model_file:
+        attrs["model_file"] = model.model_file
+    if model.model_path:
+        attrs["model_path"] = model.model_path
+    if model.details_cached:
+        # These came from the last run rather than the live process.
+        attrs["details_cached"] = True
     if model.cmd:
         attrs["cmd"] = model.cmd
     if model.proxy:
@@ -332,8 +340,15 @@ MODEL_SENSORS: tuple[LlamaSwapModelSensorDescription, ...] = (
         native_unit_of_measurement=UnitOfTime.SECONDS,
         device_class=SensorDeviceClass.DURATION,
         entity_category=EntityCategory.DIAGNOSTIC,
-        entity_registry_enabled_default=False,
         value_fn=lambda model: model.ttl,
+    ),
+    LlamaSwapModelSensorDescription(
+        key="model_file",
+        translation_key="model_file",
+        icon="mdi:file-document-outline",
+        entity_category=EntityCategory.DIAGNOSTIC,
+        value_fn=lambda model: model.model_file,
+        attributes_fn=lambda model: {"model_path": model.model_path},
     ),
 )
 
