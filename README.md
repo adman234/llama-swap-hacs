@@ -85,12 +85,23 @@ own device, linked to the server.
 | Entity | What it gives you |
 | --- | --- |
 | `sensor.<model>_state` | `stopped`, `starting`, `ready`, `stopping` or `shutdown` |
-| `binary_sensor.<model>_loaded` | On while the model holds a process |
 | `switch.<model>_loaded` | Turn on to load, off to unload |
-| `button.<model>_unload` | Unload just this model |
 | `sensor.<model>_context_length` | Context size (see below) |
 | `sensor.<model>_model_file` | The weights file, e.g. `Qwen3-Coder-30B-Q4_K_M.gguf` |
 | `sensor.<model>_unload_after` | The model's TTL in seconds |
+| `binary_sensor.<model>_loaded` | On while the model holds a process (disabled by default) |
+| `button.<model>_unload` | Unload just this model (disabled by default) |
+
+The last two are off by default because they duplicate the switch: the switch
+already shows loaded/not-loaded, and turning it off already unloads. With a
+dozen models, enabling them doubles the entity count for no new information.
+Enable either one per model from the device page if you want a read-only
+indicator or a control that cannot accidentally start a model.
+
+For automations, prefer `sensor.<model>_state` over the loaded/on-off entities.
+"Loaded" is true for both `starting` and `ready`, so it answers "is this
+occupying VRAM"; only the state sensor tells you whether the model can actually
+serve a request yet.
 
 ### Where context length and the model file come from
 

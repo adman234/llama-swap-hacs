@@ -16,7 +16,7 @@ from homeassistant.const import ATTR_ENTITY_ID, CONF_API_KEY, CONF_HOST, CONF_PO
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import ServiceValidationError
 
-from .conftest import BASE_URL, setup_integration
+from .conftest import BASE_URL, async_enable_entity, setup_integration
 
 SECOND_URL = "http://other.local:8080"
 
@@ -48,8 +48,9 @@ async def test_unload_model_falls_back_on_old_server(
 async def test_unload_model_button(
     hass: HomeAssistant, mock_llama_swap: AiohttpClientMocker, config_entry
 ) -> None:
-    """The per-model unload button hits the per-model endpoint."""
+    """The per-model unload button hits the per-model endpoint once enabled."""
     await setup_integration(hass, config_entry)
+    await async_enable_entity(hass, config_entry, "button.qwen3_coder_30b_unload")
     mock_llama_swap.post(f"{BASE_URL}/api/models/unload/qwen3-coder", text="OK")
 
     await hass.services.async_call(

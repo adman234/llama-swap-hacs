@@ -56,10 +56,16 @@ class LlamaSwapUnloadAllButton(LlamaSwapEntity, ButtonEntity):
 
 
 class LlamaSwapUnloadModelButton(LlamaSwapModelEntity, ButtonEntity):
-    """Stops one model."""
+    """Stops one model.
+
+    Disabled by default: turning the model's switch off does the same thing.
+    It stays available for dashboards that want a one-tap unload without a
+    control that can also start the model.
+    """
 
     _attr_translation_key = "unload_model"
     _attr_icon = "mdi:eject-outline"
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: LlamaSwapCoordinator, model_id: str) -> None:
         """Initialise the button."""

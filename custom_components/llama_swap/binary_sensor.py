@@ -54,10 +54,16 @@ class LlamaSwapAnyModelLoaded(LlamaSwapEntity, BinarySensorEntity):
 
 
 class LlamaSwapModelLoaded(LlamaSwapModelEntity, BinarySensorEntity):
-    """Reports whether one model is loaded."""
+    """Reports whether one model is loaded.
+
+    Disabled by default: the model's switch already carries this on/off state,
+    and the state sensor says more by separating "starting" from "ready". It
+    stays available for anyone who wants a read-only version of the switch.
+    """
 
     _attr_translation_key = "model_loaded"
     _attr_device_class = BinarySensorDeviceClass.RUNNING
+    _attr_entity_registry_enabled_default = False
 
     def __init__(self, coordinator: LlamaSwapCoordinator, model_id: str) -> None:
         """Initialise the binary sensor."""

@@ -91,7 +91,7 @@ async def test_state_updates_on_poll(
     """A model unloading upstream is reflected on the next poll."""
     _mock_legacy_server(aioclient_mock, models_payload, running_payload)
     await setup_integration(hass, config_entry)
-    assert hass.states.get("binary_sensor.qwen3_coder_30b_loaded").state == STATE_ON
+    assert hass.states.get("switch.qwen3_coder_30b_loaded").state == STATE_ON
 
     aioclient_mock.clear_requests()
     for record in models_payload["data"]:
@@ -100,7 +100,7 @@ async def test_state_updates_on_poll(
 
     await async_advance(hass, freezer, DEFAULT_SCAN_INTERVAL + 1)
 
-    assert hass.states.get("binary_sensor.qwen3_coder_30b_loaded").state == STATE_OFF
+    assert hass.states.get("switch.qwen3_coder_30b_loaded").state == STATE_OFF
     assert hass.states.get("sensor.qwen3_coder_30b_state").state == "stopped"
     assert hass.states.get("sensor.llama_local_8080_loaded_models").state == "0"
     assert (
