@@ -54,7 +54,7 @@ One device represents the llama-swap instance.
 
 | Entity | What it gives you |
 | --- | --- |
-| `sensor.<server>_active_model` | The loaded model's ID, or unknown when nothing is loaded |
+| `sensor.<server>_active_model` | The loaded model's ID, or `none` when nothing is loaded |
 | `sensor.<server>_loaded_models` | How many models are loaded right now |
 | `sensor.<server>_configured_models` | How many models llama-swap knows about |
 | `binary_sensor.<server>_model_loaded` | On while any model holds a process |
@@ -67,7 +67,9 @@ If llama-swap has performance monitoring enabled, you also get
 `cpu_utilization`, `memory_used`, `memory_utilization`, `memory_total`,
 `swap_used` and `load_average_1m` / `5m` / `15m`.
 
-`sensor.<server>_active_model` reports one model ID. llama-swap can hold
+`sensor.<server>_active_model` reads `none` on an idle server, so it stays
+distinguishable from `unavailable`, which means llama-swap could not be
+reached. It reports one model ID. llama-swap can hold
 several models at once when its groups allow it, so the full picture lives in
 the attributes:
 

@@ -10,7 +10,7 @@ import pytest
 from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
-from custom_components.llama_swap.const import DEFAULT_SCAN_INTERVAL
+from custom_components.llama_swap.const import DEFAULT_SCAN_INTERVAL, NO_MODEL
 from homeassistant.config_entries import ConfigEntryState
 from homeassistant.const import STATE_OFF, STATE_ON, STATE_UNAVAILABLE
 from homeassistant.core import HomeAssistant
@@ -107,6 +107,8 @@ async def test_state_updates_on_poll(
         hass.states.get("binary_sensor.llama_local_8080_model_loaded").state
         == STATE_OFF
     )
+    # An idle server says so, rather than going unknown.
+    assert hass.states.get("sensor.llama_local_8080_active_model").state == NO_MODEL
 
 
 async def test_new_model_gets_entities(

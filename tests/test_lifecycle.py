@@ -10,7 +10,12 @@ from pytest_homeassistant_custom_component.common import MockConfigEntry
 from pytest_homeassistant_custom_component.test_util.aiohttp import AiohttpClientMocker
 
 from custom_components.llama_swap import async_remove_config_entry_device
-from custom_components.llama_swap.const import DEFAULT_SCAN_INTERVAL, DOMAIN
+from custom_components.llama_swap.const import (
+    DEFAULT_SCAN_INTERVAL,
+    DOMAIN,
+    NO_MODEL,
+)
+from homeassistant.const import STATE_UNKNOWN
 from homeassistant.core import HomeAssistant
 from homeassistant.exceptions import HomeAssistantError
 from homeassistant.helpers import device_registry as dr
@@ -259,3 +264,22 @@ async def test_large_attributes_are_not_recorded(
     loaded = hass.states.get("sensor.llama_local_8080_loaded_models")
     assert "models" not in loaded.attributes
     assert loaded.attributes["loaded_models"] == ["auto", "qwen3-coder"]
+
+
+async def test_idle_server_is_not_unknown(
+    hass: HomeAssistant,
+    aioclient_mock: AiohttpClientMocker,
+    config_entry: MockConfigEntry,
+    models_payload: dict[str, Any],
+) -> None:
+    """Nothing loaded reads "none"; an unreachable server reads unavailable."""
+    for record in models_payload["data"]:
+        record["status"] = {"value": "unloaded"}
+    _mock_legacy_server(aioclient_mock, models_payload, {"running": []})
+    await setup_integration(hass, config_entry)
+
+    state = hass.states.get("sensor.llama_local_8080_active_model")
+    assert state.state == NO_MODEL
+    assert state.state != STATE_UNKNOWN
+    assert state.attributes["loaded_models"] == []
+    assert state.attributes["loaded_count"] == 0

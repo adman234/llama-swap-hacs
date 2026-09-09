@@ -21,6 +21,11 @@ LOAD_TIMEOUT: Final = 600
 
 MANUFACTURER: Final = "llama-swap"
 
+# Reported by the active-model sensor when nothing is loaded. A real
+# state rather than "unknown", so automations can match on it directly
+# and history shows an idle server instead of a gap.
+NO_MODEL: Final = "none"
+
 # Process states reported by /running. Models with no entry are "stopped".
 STATE_STOPPED: Final = "stopped"
 STATE_STARTING: Final = "starting"

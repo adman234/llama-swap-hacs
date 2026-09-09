@@ -25,7 +25,7 @@ from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
-from .const import DOMAIN, MANUFACTURER, MODEL_STATES
+from .const import DOMAIN, MANUFACTURER, MODEL_STATES, NO_MODEL
 from .coordinator import (
     LlamaSwapConfigEntry,
     LlamaSwapCoordinator,
@@ -112,14 +112,16 @@ def _model_attributes(model: ModelInfo) -> dict[str, Any]:
     return attrs
 
 
-def _active_model(data: LlamaSwapData) -> str | None:
-    """Return the loaded model ID, or None when nothing is loaded.
+def _active_model(data: LlamaSwapData) -> str:
+    """Return the loaded model ID, or "none" when nothing is loaded.
 
     llama-swap can run several models at once when its groups allow it. The
     lowest-sorting ID is reported here; the full set is in the attributes.
+    An idle server reports NO_MODEL rather than going unknown, which keeps
+    "nothing is loaded" distinguishable from "the server is unreachable".
     """
     loaded = data.loaded_models
-    return loaded[0].id if loaded else None
+    return loaded[0].id if loaded else NO_MODEL
 
 
 def _active_model_attributes(data: LlamaSwapData) -> dict[str, Any]:
