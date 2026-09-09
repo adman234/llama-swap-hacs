@@ -27,6 +27,10 @@ extra dependencies.
 Copy `custom_components/llama_swap` into your Home Assistant `config/custom_components`
 directory and restart.
 
+### Requirements
+
+Home Assistant 2025.3 or newer.
+
 ## Configuration
 
 The config flow asks for:
@@ -181,8 +185,8 @@ automation:
         to: "on"
     conditions:
       - condition: state
-        entity_id: binary_sensor.qwen3_coder_loaded
-        state: "off"
+        entity_id: sensor.qwen3_coder_state
+        state: stopped
     actions:
       - action: llama_swap.load_model
         data:
@@ -244,7 +248,22 @@ automation:
           profile: low-power
 ```
 
+## How entities appear and disappear
+
+Models, GPUs and the profile selector are discovered on every poll, so adding a
+model to llama-swap's config, enabling its performance monitoring, or creating
+your first profile makes the matching entities show up without reloading the
+integration.
+
+Entities are never deleted while Home Assistant is running. A model that goes
+missing goes unavailable instead, so a llama-swap config reload cannot destroy
+its history. Devices for models that are genuinely gone are cleaned up the next
+time the integration reloads, and any orphan can also be deleted by hand from
+its device page.
+
 ## Compatibility
+
+Requires Home Assistant 2025.3 or newer.
 
 The model, state and control entities work against any llama-swap that has
 `/v1/models`, `/running` and `/unload`. The version, profile and performance

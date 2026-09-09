@@ -54,11 +54,6 @@ class LlamaSwapModelSwitch(LlamaSwapModelEntity, SwitchEntity):
         model = self.model
         return model.is_loaded if model else None
 
-    @property
-    def assumed_state(self) -> bool:
-        """Return False; the state is read back from the server."""
-        return False
-
     async def async_turn_on(self, **kwargs: Any) -> None:
         """Load the model."""
         try:

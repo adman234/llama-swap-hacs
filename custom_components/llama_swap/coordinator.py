@@ -129,14 +129,10 @@ class LlamaSwapCoordinator(DataUpdateCoordinator[LlamaSwapData]):
         )
         self.client = client
         self._model_facts: dict[str, ModelFacts] = {}
+        self._version: dict[str, Any] = {}
         self._has_version = True
         self._has_profiles = True
         self._has_performance = True
-
-    @property
-    def supports_profiles(self) -> bool:
-        """Return True when the server exposes the profiles API."""
-        return self._has_profiles
 
     async def _async_update_data(self) -> LlamaSwapData:
         """Fetch the current server state."""
@@ -154,13 +150,25 @@ class LlamaSwapCoordinator(DataUpdateCoordinator[LlamaSwapData]):
             models=_build_models(models_raw, running_raw, self._model_facts)
         )
 
-        if self._has_version:
+        # Forget models the server no longer lists, so the cache cannot grow
+        # without bound over a long-running session. Guarded on a non-empty
+        # result: an empty listing is more likely a llama-swap config reload
+        # in progress than every model genuinely disappearing.
+        if data.models:
+            for model_id in set(self._model_facts) - set(data.models):
+                del self._model_facts[model_id]
+
+        # The build only changes when llama-swap restarts, so this is fetched
+        # once rather than on every poll. A restart that changes it is picked
+        # up the next time the entry reloads.
+        if self._has_version and not self._version:
             try:
-                data.version = await self.client.async_get_version()
+                self._version = await self.client.async_get_version()
             except LlamaSwapNotFoundError:
                 self._has_version = False
             except LlamaSwapError as err:
                 _LOGGER.debug("Could not read version: %s", err)
+        data.version = self._version
 
         if self._has_profiles:
             try:

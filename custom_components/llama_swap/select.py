@@ -9,7 +9,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 
 from .api import LlamaSwapError
 from .coordinator import LlamaSwapConfigEntry, LlamaSwapCoordinator
-from .entity import LlamaSwapEntity
+from .entity import LlamaSwapEntity, async_setup_dynamic_entities
 
 PARALLEL_UPDATES = 1
 
@@ -22,11 +22,14 @@ async def async_setup_entry(
     entry: LlamaSwapConfigEntry,
     async_add_entities: AddConfigEntryEntitiesCallback,
 ) -> None:
-    """Set up the profile selector, when the server has profiles configured."""
+    """Set up the profile selector once the server reports any profiles."""
     coordinator = entry.runtime_data
-    if not coordinator.data.profiles:
-        return
-    async_add_entities([LlamaSwapProfileSelect(coordinator)])
+    async_setup_dynamic_entities(
+        coordinator,
+        async_add_entities,
+        lambda data: ["profile"] if data.profiles else [],
+        lambda _key: (LlamaSwapProfileSelect(coordinator),),
+    )
 
 
 class LlamaSwapProfileSelect(LlamaSwapEntity, SelectEntity):

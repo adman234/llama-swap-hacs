@@ -35,6 +35,7 @@ from .coordinator import (
 from .entity import (
     LlamaSwapEntity,
     LlamaSwapModelEntity,
+    async_setup_dynamic_entities,
     async_setup_model_entities,
 )
 
@@ -192,7 +193,9 @@ SERVER_SENSORS: tuple[LlamaSwapSensorDescription, ...] = (
         native_unit_of_measurement="models",
         state_class=SensorStateClass.MEASUREMENT,
         value_fn=lambda data: len(data.loaded_models),
-        attributes_fn=_active_model_attributes,
+        attributes_fn=lambda data: {
+            "loaded_models": [model.id for model in data.loaded_models]
+        },
     ),
     LlamaSwapSensorDescription(
         key="total_models",
@@ -448,18 +451,30 @@ async def async_setup_entry(
 ) -> None:
     """Set up the llama-swap sensors."""
     coordinator = entry.runtime_data
+    by_key = {description.key: description for description in SERVER_SENSORS}
 
-    entities: list[Entity] = [
-        LlamaSwapServerSensor(coordinator, description)
-        for description in SERVER_SENSORS
-        if description.exists_fn(coordinator.data)
-    ]
-    entities.extend(
-        LlamaSwapGpuSensor(coordinator, stat["id"], description)
-        for stat in coordinator.data.gpu_stats
-        for description in GPU_SENSORS
+    # Sensors for optional server features only become possible once the
+    # server reports them, which can happen after setup.
+    async_setup_dynamic_entities(
+        coordinator,
+        async_add_entities,
+        lambda data: [
+            description.key
+            for description in SERVER_SENSORS
+            if description.exists_fn(data)
+        ],
+        lambda key: (LlamaSwapServerSensor(coordinator, by_key[key]),),
     )
-    async_add_entities(entities)
+
+    async_setup_dynamic_entities(
+        coordinator,
+        async_add_entities,
+        lambda data: [stat["id"] for stat in data.gpu_stats],
+        lambda gpu_id: (
+            LlamaSwapGpuSensor(coordinator, gpu_id, description)
+            for description in GPU_SENSORS
+        ),
+    )
 
     def _build(model_id: str) -> Iterable[Entity]:
         return (
@@ -474,6 +489,11 @@ class LlamaSwapServerSensor(LlamaSwapEntity, SensorEntity):
     """A sensor reporting whole-server state."""
 
     entity_description: LlamaSwapSensorDescription
+    # The per-model detail is large and changes whenever any model does. It
+    # stays in the state machine for templates, but recording it would write
+    # kilobytes per change, and past 16KB the recorder drops the attributes
+    # entirely rather than truncating.
+    _unrecorded_attributes = frozenset({"models"})
 
     def __init__(
         self,

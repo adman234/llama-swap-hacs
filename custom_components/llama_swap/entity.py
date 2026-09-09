@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from collections.abc import Callable, Iterable
+from collections.abc import Callable, Hashable, Iterable
 
 from homeassistant.core import callback
 from homeassistant.helpers.device_registry import DeviceInfo
@@ -11,7 +11,7 @@ from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
 from homeassistant.helpers.update_coordinator import CoordinatorEntity
 
 from .const import DOMAIN, MANUFACTURER
-from .coordinator import LlamaSwapCoordinator, ModelInfo
+from .coordinator import LlamaSwapCoordinator, LlamaSwapData, ModelInfo
 
 
 class LlamaSwapEntity(CoordinatorEntity[LlamaSwapCoordinator]):
@@ -53,32 +53,52 @@ class LlamaSwapModelEntity(CoordinatorEntity[LlamaSwapCoordinator]):
 
 
 @callback
-def async_setup_model_entities(
+def async_setup_dynamic_entities[KeyT: Hashable](
     coordinator: LlamaSwapCoordinator,
     async_add_entities: AddConfigEntryEntitiesCallback,
-    build: Callable[[str], Iterable[Entity]],
+    keys_fn: Callable[[LlamaSwapData], Iterable[KeyT]],
+    build: Callable[[KeyT], Iterable[Entity]],
 ) -> None:
-    """Create per-model entities, including for models added later.
+    """Create entities for each key, including keys that show up later.
 
-    llama-swap's model list changes when its config is reloaded, so this keeps
-    watching the coordinator and builds entities for IDs it has not seen yet.
+    What a llama-swap server exposes is not fixed at setup: reloading its
+    config changes the model list, and turning on performance monitoring or
+    adding a first profile makes whole groups of entities become possible.
+    Watching the coordinator means none of that needs an integration reload.
+
+    Entities are never removed here. A key that disappears leaves its entities
+    unavailable rather than deleted, so a model that is temporarily missing
+    during a llama-swap config reload does not lose its history or its
+    customisations.
     """
-    known: set[str] = set()
+    known: set[KeyT] = set()
 
     @callback
     def _async_add_new() -> None:
         entities: list[Entity] = []
-        for model_id in coordinator.data.models:
-            if model_id in known:
+        for key in keys_fn(coordinator.data):
+            if key in known:
                 continue
-            known.add(model_id)
-            entities.extend(build(model_id))
+            known.add(key)
+            entities.extend(build(key))
         if entities:
             async_add_entities(entities)
 
     _async_add_new()
     coordinator.config_entry.async_on_unload(
         coordinator.async_add_listener(_async_add_new)
+    )
+
+
+@callback
+def async_setup_model_entities(
+    coordinator: LlamaSwapCoordinator,
+    async_add_entities: AddConfigEntryEntitiesCallback,
+    build: Callable[[str], Iterable[Entity]],
+) -> None:
+    """Create per-model entities, including for models added later."""
+    async_setup_dynamic_entities(
+        coordinator, async_add_entities, lambda data: data.models, build
     )
 
 
@@ -108,3 +128,15 @@ def model_device_info(coordinator: LlamaSwapCoordinator, model_id: str) -> Devic
         via_device=(DOMAIN, entry.entry_id),
         configuration_url=f"{coordinator.client.base_url}/ui/models",
     )
+
+
+def current_device_identifiers(coordinator: LlamaSwapCoordinator) -> set[str]:
+    """Return the identifiers of every device this entry should own now."""
+    entry_id = coordinator.config_entry.entry_id
+    data = coordinator.data
+    identifiers = {entry_id}
+    if data is None:
+        return identifiers
+    identifiers.update(f"{entry_id}_model_{model_id}" for model_id in data.models)
+    identifiers.update(f"{entry_id}_gpu_{stat['id']}" for stat in data.gpu_stats)
+    return identifiers

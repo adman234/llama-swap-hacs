@@ -27,7 +27,22 @@ class LlamaSwapAuthError(LlamaSwapError):
 
 
 class LlamaSwapNotFoundError(LlamaSwapError):
-    """The requested endpoint or model does not exist."""
+    """The server answered 404."""
+
+
+class LlamaSwapRouteMissingError(LlamaSwapNotFoundError):
+    """The server has no such endpoint, so this build predates it.
+
+    Kept distinct from a 404 about the *target*: llama-swap answers 404 both
+    for a route it does not have and for a model it declines to act on, and
+    those must not be treated the same way.
+    """
+
+
+# Go's default mux writes exactly this when nothing is registered for a path.
+# llama-swap's own 404s go through its error envelope instead, so the body is
+# what tells the two apart.
+_GO_NOT_FOUND = "404 page not found"
 
 
 class LlamaSwapClient:
@@ -91,7 +106,10 @@ class LlamaSwapClient:
                         f"llama-swap rejected the API key ({response.status})"
                     )
                 if response.status == 404:
-                    raise LlamaSwapNotFoundError(f"{path} returned 404")
+                    body = (await response.text())[:200]
+                    if _GO_NOT_FOUND in body:
+                        raise LlamaSwapRouteMissingError(f"{path} is not served")
+                    raise LlamaSwapNotFoundError(f"{path} returned 404: {body}")
                 if response.status >= 400:
                     body = (await response.text())[:200]
                     raise LlamaSwapError(
@@ -171,14 +189,20 @@ class LlamaSwapClient:
         await self._request("GET", "/unload", expect_json=False)
 
     async def async_unload_model(self, model: str) -> None:
-        """Stop one model by ID."""
+        """Stop one model by ID.
+
+        Only a genuinely absent endpoint falls back to unloading everything.
+        A current llama-swap also answers 404 here for a model it does not
+        know and for any peer model ("no local server found"), and unloading
+        the whole server because one model was refused would be a disaster.
+        """
         path = f"/api/models/unload/{quote(model, safe='')}"
         try:
             await self._request("POST", path, expect_json=False)
-        except LlamaSwapNotFoundError:
-            # Older builds have no per-model unload endpoint.
+        except LlamaSwapRouteMissingError:
             _LOGGER.debug(
-                "Per-model unload unavailable, falling back to unloading everything"
+                "No per-model unload endpoint on this llama-swap build; "
+                "unloading every model instead"
             )
             await self.async_unload_all()
 
