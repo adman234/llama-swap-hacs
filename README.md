@@ -11,6 +11,17 @@ use in automations, and lets you load, unload and switch profiles.
 Everything is local polling against llama-swap's own HTTP API. No cloud, no
 extra dependencies.
 
+## Why
+
+llama-swap starts a model when a request asks for it and stops it after a timeout,
+so what is holding the GPU changes through the day and is invisible from Home
+Assistant. This integration makes it visible and controllable: warm a model up
+before you need it, free the GPU for something else, or check that a model is
+actually ready before a voice or automation request depends on it.
+
+It is an independent project and is not affiliated with llama-swap. llama-swap
+itself is by [mostlygeek][llama-swap].
+
 ## Installation
 
 ### HACS
@@ -19,17 +30,13 @@ extra dependencies.
 2. Add `https://github.com/adman234/llama-swap-hacs` with the category
    **Integration**.
 3. Search for **llama-swap**, install it, and restart Home Assistant.
-4. Go to **Settings → Devices & Services → Add Integration** and pick
+4. Go to **Settings > Devices & Services > Add Integration** and pick
    **llama-swap**.
 
 ### Manual
 
 Copy `custom_components/llama_swap` into your Home Assistant `config/custom_components`
 directory and restart.
-
-### Requirements
-
-Home Assistant 2025.3 or newer.
 
 ## Configuration
 
