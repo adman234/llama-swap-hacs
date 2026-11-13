@@ -37,6 +37,7 @@ from .entity import (
     LlamaSwapModelEntity,
     async_setup_dynamic_entities,
     async_setup_model_entities,
+    via_server,
 )
 
 PARALLEL_UPDATES = 0
@@ -570,7 +571,7 @@ class LlamaSwapGpuSensor(LlamaSwapEntity, SensorEntity):
             name=self._stat.get("name") or f"GPU {gpu_id}",
             manufacturer=MANUFACTURER,
             model="GPU",
-            via_device=(DOMAIN, entry.entry_id),
+            **via_server(coordinator),
         )
 
     @property

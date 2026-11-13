@@ -3,8 +3,10 @@
 from __future__ import annotations
 
 from collections.abc import Callable, Hashable, Iterable
+from typing import Any
 
 from homeassistant.core import callback
+from homeassistant.helpers import device_registry as dr
 from homeassistant.helpers.device_registry import DeviceInfo
 from homeassistant.helpers.entity import Entity
 from homeassistant.helpers.entity_platform import AddConfigEntryEntitiesCallback
@@ -116,6 +118,26 @@ def server_device_info(coordinator: LlamaSwapCoordinator) -> DeviceInfo:
     )
 
 
+# HA 2026.x replaced DeviceInfo's via_device (an identifier tuple) with
+# via_device_id (a device registry id); via_device stops working in 2027.8.
+# Older cores only know via_device.
+_HAS_VIA_DEVICE_ID = "via_device_id" in getattr(DeviceInfo, "__annotations__", {})
+
+
+def via_server(coordinator: LlamaSwapCoordinator) -> dict[str, Any]:
+    """Return the DeviceInfo fields that tie a device to the server device."""
+    entry = coordinator.config_entry
+    identifier = (DOMAIN, entry.entry_id)
+    if not _HAS_VIA_DEVICE_ID:
+        return {"via_device": identifier}
+    # The server device may not be registered yet if this platform loads
+    # first; get_or_create makes a bare entry the server entities fill in.
+    server = dr.async_get(coordinator.hass).async_get_or_create(
+        config_entry_id=entry.entry_id, identifiers={identifier}
+    )
+    return {"via_device_id": server.id}
+
+
 def model_device_info(coordinator: LlamaSwapCoordinator, model_id: str) -> DeviceInfo:
     """Return the device entry representing one model, tied to the server."""
     entry = coordinator.config_entry
@@ -125,7 +147,7 @@ def model_device_info(coordinator: LlamaSwapCoordinator, model_id: str) -> Devic
         name=info.display_name if info else model_id,
         manufacturer=MANUFACTURER,
         model=(info.kind if info else "model").capitalize(),
-        via_device=(DOMAIN, entry.entry_id),
+        **via_server(coordinator),
         configuration_url=f"{coordinator.client.base_url}/ui/models",
     )
 
